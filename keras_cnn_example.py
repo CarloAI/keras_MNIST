@@ -20,6 +20,7 @@ print("X_test original shape", X_test.shape)
 print("y_test original shape", y_test.shape)
 plt.imshow(X_train[0], cmap='gray')
 plt.title('Class '+ str(y_train[0]))
+plt.show()
 
 # reshape the input to take the shape (batch, height, width, channels)
 X_train = X_train.reshape(X_train.shape[0], 28, 28, 1)
@@ -49,9 +50,18 @@ Y_test = np_utils.to_categorical(y_test, number_of_classes)
 
 model = Sequential()
 
+# add 32 filters with size=(3,3)
 model.add(Conv2D(32, (3, 3), input_shape=(28,28,1)))
+
+# normalize the matrix after a convolution layer so the scale of each dimension
+# remains the same (it reduces the training time significantly)
+BatchNormalization(axis=-1)
+
+# activation layer
 model.add(Activation('relu'))
 BatchNormalization(axis=-1)
+
+# max pooling layer
 model.add(Conv2D(32, (3, 3)))
 model.add(Activation('relu'))
 model.add(MaxPooling2D(pool_size=(2,2)))
@@ -138,7 +148,6 @@ mi.N
 
 model.fit_generator(mi, steps_per_epoch=mi.N//64, epochs=5, validation_data=(X_test, Y_test))
 
-plt.show()
 
 
 
