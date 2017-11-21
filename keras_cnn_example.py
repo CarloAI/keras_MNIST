@@ -5,13 +5,13 @@ import matplotlib.pyplot as plt
 from keras.datasets import mnist
 from keras.models import Sequential
 from keras.layers import Dense, Dropout, Activation, Flatten
-from keras.optimizers import Adam
 from keras.layers.normalization import BatchNormalization
 from keras.utils import np_utils
 from keras.layers import Conv2D, MaxPooling2D, ZeroPadding2D, GlobalAveragePooling2D
 from keras.layers.advanced_activations import LeakyReLU 
 from keras.preprocessing.image import ImageDataGenerator
 
+#%%
 # load pre-shuffled MNIST data into train and test sets
 (X_train, y_train), (X_test, y_test) = mnist.load_data()
 print("X_train original shape", X_train.shape)
@@ -38,116 +38,84 @@ number_of_classes = 10
 Y_train = np_utils.to_categorical(y_train, number_of_classes)
 Y_test = np_utils.to_categorical(y_test, number_of_classes)
 
-# Three steps to Convolution
-# 1. Convolution
-# 2. Activation
-# 3. Polling
-# Repeat Steps 1,2,3 for adding more hidden layers
-
-# 4. After that make a fully connected network
-# This fully connected network gives ability to the CNN
-# to classify the samples
-
+#%%
+# Use a simple model - a linear stack of layers
 model = Sequential()
 
-# add 32 filters with size=(3,3)
-model.add(Conv2D(32, (3, 3), input_shape=(28,28,1)))
+# Add a convolutional layer with 32 filters of size=(6,6)
+model.add(Conv2D(32, (6, 6), activation='relu', input_shape=(28,28,1)))
 
-# normalize the matrix after a convolution layer so the scale of each dimension
+# Check shape of output
+print(model.output_shape)
+
+# Normalize the matrix after a convolution layer so the scale of each dimension
 # remains the same (it reduces the training time significantly)
 BatchNormalization(axis=-1)
 
-# activation layer
-model.add(Activation('relu'))
-BatchNormalization(axis=-1)
-
-# max pooling layer
-model.add(Conv2D(32, (3, 3)))
-model.add(Activation('relu'))
+# Add a max pooling layer
 model.add(MaxPooling2D(pool_size=(2,2)))
 
-BatchNormalization(axis=-1)
-model.add(Conv2D(64,(3, 3)))
-model.add(Activation('relu'))
-BatchNormalization(axis=-1)
-model.add(Conv2D(64, (3, 3)))
-model.add(Activation('relu'))
-model.add(MaxPooling2D(pool_size=(2,2)))
-
-model.add(Flatten())
-# Fully connected layer
-
-BatchNormalization()
-model.add(Dense(512))
-model.add(Activation('relu'))
-BatchNormalization()
+# Add a dropout layer
 model.add(Dropout(0.2))
-model.add(Dense(10))
 
-# model.add(Convolution2D(10,3,3, border_mode='same'))
-# model.add(GlobalAveragePooling2D())
-model.add(Activation('softmax'))
+# Add a second convolutional layer with 16 filters of size=(3,3)
+model.add(Conv2D(16, (3, 3), activation='relu'))
+BatchNormalization(axis=-1)
+model.add(MaxPooling2D(pool_size=(2,2)))
+model.add(Dropout(0.2))
 
+#%%
+# Flatten convolutional layers before passing them as input to the fully 
+# connected dense layers
+model.add(Flatten())
+
+# Add a fully connected layer with 128 neurons
+model.add(Dense(128, activation='relu'))
+BatchNormalization(axis=-1)
+model.add(Dropout(0.2))
+
+# Add a second fully connected layer with 64 neurons
+model.add(Dense(64, activation='relu'))
+BatchNormalization(axis=-1)
+model.add(Dropout(0.2))
+
+# Add an output layer with 10 neurons, one for each class. Use a softmax 
+# activation function to output probability-like predictions for each class
+model.add(Dense(number_of_classes, activation='softmax'))
+
+# Print model summary
 model.summary()
 
-model.compile(loss='categorical_crossentropy', optimizer=Adam(), metrics=['accuracy'])
+#%%
+# Compile model
+model.compile(loss='categorical_crossentropy', 
+              optimizer='adam', 
+              metrics=['accuracy'])
 
+# Apply Data Augmentation to training and test sets
 gen = ImageDataGenerator(rotation_range=8, width_shift_range=0.08, shear_range=0.3,
                          height_shift_range=0.08, zoom_range=0.08)
-
 test_gen = ImageDataGenerator()
 
+# Generate batches of augmented data
 train_generator = gen.flow(X_train, Y_train, batch_size=64)
 test_generator = test_gen.flow(X_test, Y_test, batch_size=64)
 
+# Train the model
 model.fit_generator(train_generator, steps_per_epoch=60000//64, epochs=5, 
                     validation_data=test_generator, validation_steps=10000//64)
 
+# Evaluate the model
 score = model.evaluate(X_test, Y_test)
-print()
-print('Test accuracy: ', score[1])
+print('\nTest accuracy: ', score[1])
 
+# Predict classes of test data
 predictions = model.predict_classes(X_test)
 
-predictions = list(predictions)
-actuals = list(y_test)
+# Number of mislabelled images
+print('\nNumber of mislabelled images: ',np.count_nonzero(y_test-predictions),
+      '\nTotal number of images      : ',len(y_test))
 
-sub = pd.DataFrame({'Actual': actuals, 'Predictions': predictions})
-sub.to_csv('./output_cnn.csv', index=False)
-
-
-class MixIterator(object):
-    def __init__(self, iters):
-        self.iters = iters
-        self.N = sum([it.n for it in self.iters])
-
-    def reset(self):
-        for it in self.iters: it.reset()
-
-    def __iter__(self):
-        return self
-
-    def __next__(self, *args, **kwargs):
-        nexts = [next(it) for it in self.iters]
-        n0 = np.concatenate([n[0] for n in nexts])
-        n1 = np.concatenate([n[1] for n in nexts])
-        return (n0, n1)
-
-
-
-predictions = model.predict(X_test, batch_size=64)
-
-predictions[:5]
-
-batches = gen.flow(X_train, Y_train, batch_size=48)
-test_batches = test_gen.flow(X_test, predictions, batch_size=16)
-
-mi = MixIterator([batches, test_batches])
-
-mi.N
-
-model.fit_generator(mi, steps_per_epoch=mi.N//64, epochs=5, validation_data=(X_test, Y_test))
-
-
-
+#sub = pd.DataFrame({'Actual': actuals, 'Predictions': predictions})
+#sub.to_csv('./output_cnn.csv', index=False)
 
